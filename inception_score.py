@@ -38,7 +38,7 @@ def w_distance(data, noise_tensor, generator, discriminator, batch_size=32, cuda
         x,z = Variable(x.cuda()), Variable(z.cuda())
         D_x = discriminator(x) 
         D_z = discriminator(generator(z))
-        distance=-(D_x - D_z)
+        distance=torch.abs(D_x - D_z)
         distances.append(distance.data[0])
     generator.train()
     discriminator.train()
