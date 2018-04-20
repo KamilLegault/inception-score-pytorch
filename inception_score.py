@@ -19,13 +19,13 @@ class IgnoreLabelDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.orig)
 
-def w_distance(data, late_variables, generator, discriminator, batch_size=32, cuda=True):
+def w_distance(data, noise_tensor, generator, discriminator, batch_size=32, cuda=True):
 
-    sample_num=len(late_variables)
+    sample_num=len(noise_tensor)
     train_sampler = range(sample_num)
 
     gen_dataloader =  torch.utils.data.DataLoader(data, batch_size=batch_size, sampler=train_sampler, num_workers=2)
-    noise_dataset  = torch.utils.data.TensorDataset(len_variables,torch.zeros(len(len_variables)))
+    noise_dataset  = torch.utils.data.TensorDataset(noise_tensor,torch.zeros(len(noise_tensor)))
     noise_dataloader = torch.utils.data.DataLoader(noise_dataset, batch_size=batch_size, shuffle=False)
 
     generator.eval()
