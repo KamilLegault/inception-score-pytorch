@@ -9,6 +9,43 @@ from torchvision.models.inception import inception_v3
 import numpy as np
 from scipy.stats import entropy
 
+class IgnoreLabelDataset(torch.utils.data.Dataset):
+    def __init__(self, orig):
+        self.orig = orig
+
+    def __getitem__(self, index):
+        return self.orig[index][0]
+
+    def __len__(self):
+        return len(self.orig)
+
+def w_distance(data, late_variables, generator, discriminator, batch_size=32, cuda=True):
+
+    sample_num=len(late_variables)
+    train_sampler = range(sample_num)
+
+    gen_dataloader =  torch.utils.data.DataLoader(data, batch_size=batch_size, sampler=train_sampler, num_workers=2)
+    noise_dataset  = torch.utils.data.TensorDataset(len_variables,torch.zeros(len(len_variables)))
+    noise_dataloader = torch.utils.data.DataLoader(noise_dataset, batch_size=batch_size, shuffle=False)
+
+    generator.eval()
+    discriminator.eval()
+    
+    distances=[]
+    for x, z in zip(gen_dataloader, noise_dataloader):
+        x ,_ = x
+        z ,_ = z
+        x,z = Variable(x.cuda()), Variable(z.cuda())
+        D_x = discriminator(x) 
+        D_z = discriminator(generator(z))
+        distance=-(D_x - D_z)
+        distances.append(distance.data[0])
+    generator.train()
+    discriminator.train()
+
+    return np.mean(distances)
+        
+        
 def inception_score(imgs, cuda=True, batch_size=32, resize=False, splits=1):
     """Computes the inception score of the generated images imgs
 
@@ -17,6 +54,7 @@ def inception_score(imgs, cuda=True, batch_size=32, resize=False, splits=1):
     batch_size -- batch size for feeding into Inception v3
     splits -- number of splits
     """
+    imgs = IgnoreLabelDataset(imgs)
     N = len(imgs)
 
     assert batch_size > 0
@@ -46,12 +84,12 @@ def inception_score(imgs, cuda=True, batch_size=32, resize=False, splits=1):
     # Get predictions
     preds = np.zeros((N, 1000))
 
-    for i, (batch, _) in enumerate(dataloader):
+    for i, batch in enumerate(dataloader, 0):
         batch = batch.type(dtype)
         batchv = Variable(batch)
         batch_size_i = batch.size()[0]
 
-        preds[i*batch_size:i*batch_size + batch_size_i] = get_pred(batchv)
+        preds[i*batch_size:(i+1)*batch_size] = get_pred(batchv)
 
     # Now compute the mean kl-div
     split_scores = []
@@ -66,30 +104,3 @@ def inception_score(imgs, cuda=True, batch_size=32, resize=False, splits=1):
         split_scores.append(np.exp(np.mean(scores)))
 
     return np.mean(split_scores), np.std(split_scores)
-
-if __name__ == '__main__':
-    class IgnoreLabelDataset(torch.utils.data.Dataset):
-        def __init__(self, orig):
-            self.orig = orig
-
-        def __getitem__(self, index):
-            return self.orig[index][0]
-
-        def __len__(self):
-            return len(self.orig)
-
-    import torchvision.datasets as dset
-    import torchvision.transforms as transforms
-
-    cifar = dset.CIFAR10(root='data/', download=True,
-                             transform=transforms.Compose([
-                                 transforms.Scale(32),
-                                 transforms.ToTensor(),
-                                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-                             ])
-    )
-
-    IgnoreLabelDataset(cifar)
-
-    print ("Calculating Inception Score...")
-    print (inception_score(IgnoreLabelDataset(cifar), cuda=True, batch_size=32, resize=True, splits=10))
